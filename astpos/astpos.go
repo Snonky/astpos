@@ -36,6 +36,8 @@ type astPositioner struct {
 	// Position counter
 	p int
 
+	inStruct bool
+
 	comments []*ast.CommentGroup
 }
 
@@ -236,11 +238,18 @@ func (p *astPositioner) down(n ast.Node) bool {
 		if n.Opening != token.NoPos {
 			n.Opening = pc()
 			p.moveN(1)
+			if p.inStruct {
+				p.newline()
+			}
 		}
 		traverseList(p, n.List)
 		if n.Closing != token.NoPos {
 			n.Closing = pc()
 			p.moveN(1)
+			if p.inStruct {
+				p.newline()
+				p.newline()
+			}
 		}
 		return false
 
@@ -407,6 +416,10 @@ func (p *astPositioner) down(n ast.Node) bool {
 	case *ast.StructType:
 		n.Struct = pc()
 		p.move(token.STRUCT)
+		p.inStruct = true
+		p.traverse(n.Fields)
+		p.inStruct = false
+		return false
 
 	case *ast.SwitchStmt:
 		n.Switch = pc()
@@ -452,7 +465,10 @@ func (p *astPositioner) handleComment(c *ast.CommentGroup) {
 	}
 
 	p.comments = append(p.comments, c)
-	p.newline()
+	lineStart := p.File.LineStart(p.File.Line(p.pc()))
+	if lineStart != p.pc() {
+		p.newline()
+	}
 	for _, c := range c.List {
 		c.Slash = p.pc()
 		p.moveStr(c.Text)

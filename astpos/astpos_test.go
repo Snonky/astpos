@@ -6,13 +6,15 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"log"
+	"os"
 	"testing"
 
 	"golang.org/x/tools/imports"
 )
 
 func TestAstPos(t *testing.T) {
-	src := `package example
+	src := `package astpos
 	
 	// comment 0
 	type MyStruct struct {
@@ -86,7 +88,7 @@ func TestAstPos(t *testing.T) {
 	var _ = 9000
 	`
 
-	expected := `package example
+	expected := `package astpos
 
 import "fmt"
 
@@ -164,6 +166,7 @@ var _ = 9000
 	f, fset = RewritePositions(f)
 
 	result := writeAST(t, f, fset)
+	// saveToFile(result, "test_result.go")
 	if result != expected {
 		t.Fatal("The re-formatted source code differs from the expected outcome")
 	}
@@ -180,4 +183,18 @@ func writeAST(t *testing.T, f *ast.File, fset *token.FileSet) string {
 	}
 
 	return string(importProcessed)
+}
+
+// For debugging
+func saveToFile(code, filename string) {
+	out, err := os.Create(filename)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer out.Close()
+
+	_, err = out.Write([]byte(code))
+	if err != nil {
+		log.Fatal(err)
+	}
 }
