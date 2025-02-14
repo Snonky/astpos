@@ -36,6 +36,8 @@ type astPositioner struct {
 	// Position counter
 	p int
 
+	listSizeStack, listIndexStack []int
+
 	inStruct bool
 
 	comments []*ast.CommentGroup
@@ -47,11 +49,13 @@ func newPositioner(root *ast.File) *astPositioner {
 	file := fset.AddFile("x.go", 1, maxInt-2)
 
 	positioner := &astPositioner{
-		root:     root,
-		File:     file,
-		fset:     fset,
-		p:        1,
-		comments: make([]*ast.CommentGroup, 0),
+		root:           root,
+		File:           file,
+		fset:           fset,
+		p:              1,
+		listSizeStack:  make([]int, 0),
+		listIndexStack: make([]int, 0),
+		comments:       make([]*ast.CommentGroup, 0),
 	}
 
 	return positioner
@@ -95,9 +99,33 @@ func (p *astPositioner) traverse(node ast.Node) {
 
 func traverseList[Slice ~[]E, E ast.Node](p *astPositioner, nodes Slice) {
 	// Cannot be a method because of the type params
+	p.listSizeStack = append(p.listSizeStack, len(nodes))
+	p.listIndexStack = append(p.listIndexStack, 0)
+	i := len(p.listSizeStack) - 1
 	for _, n := range nodes {
 		p.traverse(n)
+		p.listIndexStack[i] += 1
 	}
+	p.listSizeStack = p.listSizeStack[:i]
+	p.listIndexStack = p.listIndexStack[:i]
+}
+
+// Returns the size of the list that is being traversed
+// -1 if not inside a list
+func (p *astPositioner) listSize() int {
+	if len(p.listSizeStack) == 0 {
+		return -1
+	}
+	return p.listSizeStack[len(p.listSizeStack)-1]
+}
+
+// Returns the current index of the list that is being traversed
+// -1 if not inside a list
+func (p *astPositioner) index() int {
+	if len(p.listIndexStack) == 0 {
+		return -1
+	}
+	return p.listIndexStack[len(p.listIndexStack)-1]
 }
 
 // Sets the position fields of the encountered node type
@@ -209,12 +237,27 @@ func (p *astPositioner) down(n ast.Node) bool {
 	// Comments handled separately
 
 	case *ast.CompositeLit:
+		hasComposites := hasNestedComposite(n)
+		hasKeyValues := hasNestedKeyValue(n)
+		isMulti := len(n.Elts) >= 4
+		isSingle := len(n.Elts) == 1
+		doNewlines := hasComposites || (hasKeyValues && !isSingle) || isMulti
+
 		p.traverse(n.Type)
 		n.Lbrace = pc()
 		p.move(token.LBRACE)
+		if doNewlines {
+			p.newline()
+		}
 		traverseList(p, n.Elts)
+		if doNewlines {
+			p.newline()
+		}
 		n.Rbrace = pc()
 		p.move(token.RBRACE)
+		if isMulti || p.listSize() > 0 {
+			p.newline()
+		}
 		return false
 
 	case *ast.DeferStmt:
@@ -347,6 +390,11 @@ func (p *astPositioner) down(n ast.Node) bool {
 		n.Colon = pc()
 		p.move(token.COLON)
 		p.traverse(n.Value)
+
+		_, ok := n.Value.(*ast.CompositeLit)
+		if p.listSize() > 1 && !ok {
+			p.newline()
+		}
 		return false
 
 	case *ast.LabeledStmt:
@@ -474,4 +522,29 @@ func (p *astPositioner) handleComment(c *ast.CommentGroup) {
 		p.moveStr(c.Text)
 		p.newline()
 	}
+}
+
+func hasNestedComposite(composite *ast.CompositeLit) bool {
+	for _, child := range composite.Elts {
+		switch n := child.(type) {
+		case *ast.CompositeLit:
+			return true
+		case *ast.KeyValueExpr:
+			_, ok := n.Value.(*ast.CompositeLit)
+			if ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func hasNestedKeyValue(composite *ast.CompositeLit) bool {
+	for _, child := range composite.Elts {
+		switch child.(type) {
+		case *ast.KeyValueExpr:
+			return true
+		}
+	}
+	return false
 }

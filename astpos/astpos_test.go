@@ -63,6 +63,7 @@ func TestAstPos(t *testing.T) {
 		l := []*MyStruct{
 			{name: "bob"},
 			{name: "carl"},
+			{name: "mary", address: "my house", age: 20},
 		}
 		_ = l
 
@@ -86,6 +87,19 @@ func TestAstPos(t *testing.T) {
 
 	// comment 10
 	var _ = 9000
+
+	var _ = map[string]int {
+		"one": 1,
+		"two": 2,
+	}
+	
+	var _ = map[string]map[string]int {
+		"one": {"eleven": 11},
+		"two": {
+			"twentytwo": 22,
+			"twentythree": 23,
+		},
+	}
 	`
 
 	expected := `package astpos
@@ -133,7 +147,15 @@ func (s *MyStruct) PrintSome() {
 		a *= 10
 		fmt.Println(a)
 	}
-	l := []*MyStruct{{name: "bob"}, {name: "carl"}}
+	l := []*MyStruct{
+		{name: "bob"},
+		{name: "carl"},
+		{
+			name:    "mary",
+			address: "my house",
+			age:     20,
+		},
+	}
 	_ = l
 	// comment 5
 	var m = "commented var"
@@ -154,6 +176,17 @@ func hello() int {
 
 // comment 10
 var _ = 9000
+var _ = map[string]int{
+	"one": 1,
+	"two": 2,
+}
+var _ = map[string]map[string]int{
+	"one": {"eleven": 11},
+	"two": {
+		"twentytwo":   22,
+		"twentythree": 23,
+	},
+}
 `
 
 	fset := token.NewFileSet()
@@ -166,7 +199,7 @@ var _ = 9000
 	f, fset = RewritePositions(f)
 
 	result := writeAST(t, f, fset)
-	// saveToFile(result, "test_result.go")
+	//saveToFile(result, "test_result.go")
 	if result != expected {
 		t.Fatal("The re-formatted source code differs from the expected outcome")
 	}
