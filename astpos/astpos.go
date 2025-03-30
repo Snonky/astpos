@@ -3,6 +3,7 @@ package astpos
 import (
 	"go/ast"
 	"go/token"
+	"reflect"
 )
 
 // Rewrites the position values of all AST nodes in the given file.
@@ -140,6 +141,12 @@ func (p *astPositioner) index() int {
 // and thus ordered the same as documentation page of the go/ast package
 // (https://pkg.go.dev/go/ast#pkg-types).
 func (p *astPositioner) down(n ast.Node) bool {
+	if n == nil {
+		return false
+	}
+	if v := reflect.ValueOf(n); v.Kind() == reflect.Ptr && v.IsNil() {
+		return false
+	}
 	pc := p.pc
 	switch n := n.(type) {
 	case *ast.ArrayType:
