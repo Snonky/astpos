@@ -398,8 +398,7 @@ func (p *astPositioner) down(n ast.Node) bool {
 		p.move(token.COLON)
 		p.traverse(n.Value)
 
-		_, ok := n.Value.(*ast.CompositeLit)
-		if p.listSize() > 1 && !ok {
+		if p.listSize() > 1 && !isCompositeLit(n.Value) {
 			p.newline()
 		}
 		return false
@@ -552,6 +551,17 @@ func hasNestedKeyValue(composite *ast.CompositeLit) bool {
 		case *ast.KeyValueExpr:
 			return true
 		}
+	}
+	return false
+}
+
+func isCompositeLit(expr ast.Expr) bool {
+	switch n := expr.(type) {
+	case *ast.CompositeLit:
+		return true
+	case *ast.UnaryExpr:
+		_, ok := n.X.(*ast.CompositeLit)
+		return ok
 	}
 	return false
 }
